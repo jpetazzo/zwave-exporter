@@ -1,0 +1,11 @@
+[Unit]
+Description=Z-Wave Exporter
+
+[Service]
+WorkingDirectory=/home/pi/zwave-exporter
+ExecStart=node exporter.js
+Restart=always
+Environment=ZWAVE_INTERVAL=60
+
+[Install]
+WantedBy=default.target

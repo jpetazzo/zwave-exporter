@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "prom-client": "^14.1.0",
+    "zwave-js": "^9.6.2"
+  }
+}
