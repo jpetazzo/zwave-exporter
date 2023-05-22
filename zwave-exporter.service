@@ -5,7 +5,8 @@ Description=Z-Wave Exporter
 WorkingDirectory=/home/pi/zwave-exporter
 ExecStart=node exporter.js
 Restart=always
-Environment=ZWAVE_INTERVAL=60
+Environment=ZWAVE_INTERVAL=60 MAX_RSS=200000000
+MemoryMax=250M
 
 [Install]
 WantedBy=default.target

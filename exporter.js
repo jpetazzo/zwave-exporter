@@ -2,23 +2,28 @@ const { Driver } = require('zwave-js');
 const prometheus = require('prom-client');
 const http = require('http');
 
-
-process.env.LOGLEVEL = process.env.LOGLEVEL || 'warn';
+const LOG_LEVELS = { 'debug': 1, 'info': 2, 'warn': 3, 'error': 4 };
+const LOG_LEVEL = LOG_LEVELS[process.env.LOGLEVEL] || LOG_LEVELS.info;
 const METRICS_PORT = process.env.METRICS_PORT || 9026;
 const TIMESTAMPS = process.env.TIMESTAMPS || false;
 const ZWAVE_DEVICE = process.env.ZWAVE_DEVICE || '/dev/ttyACM0';
 const ZWAVE_INTERVAL = process.env.ZWAVE_INTERVAL || 60; /* in seconds */
+const MAX_RSS = parseInt(process.env.MAX_RSS, 10) || 0; /* in bytes */
 
 
 const metrics = {};
 const unit_mapping = {
+  'A': '_amperes',
   '°C': '_celsius',
+  'kWh': '_kwh',
   '%': '_percent',
   'ppm': '_ppm',
+  'V': '_volts',
+  'W': '_watts',
 }
 
 
-// "level" should be a Node log level (warn, error, info, debug, etc.)
+// "level" should be a Node log level (debug, info, warn, or error)
 // "message" should be a string
 // "kv" is an optional object with extra parameteres to be logged
 function log(level, message, kv) {
@@ -29,20 +34,22 @@ function log(level, message, kv) {
     kv.t = new Date().toJSON();
   }
   kv.level = level;
-  if (! (level in console)) {
+  if (! (level in LOG_LEVELS)) {
     kv.original_level = level;
     level = "error";
   }
   kv.log = message;
-  console[level](JSON.stringify(kv));
+  if (LOG_LEVELS[level] >= LOG_LEVEL) {
+    console[level](JSON.stringify(kv));
+  }
 }
 
 
 const driver = new Driver(ZWAVE_DEVICE);
-
 driver.on('error', (err) => {
   log("error", err);
 });
+
 
 driver.once('driver ready', () => {
   driver.controller.nodes.forEach(async (node) => {
@@ -55,14 +62,17 @@ driver.once('driver ready', () => {
       log('debug', 'value updated', {
         'node.id': node.id,
         'node.label': node.label,
-        'value.name': value.propertyName,
+        'value.endpoint': value.endpoint,
+        'value.propertyName': value.propertyName,
+        'value.propertyKeyName': value.propertyKeyName,
         'value.value': value.newValue,
       });
       let value_metadata = node.getValueMetadata(value);
       let value_unit = value_metadata.unit;
       let unit_string = unit_mapping[value_unit] || '_unknownunit';
-      let metric_name = value
-        .propertyName.toLowerCase()
+      let value_name = value.propertyKeyName || value.propertyName;
+      let metric_name = 'zwave_' + value_name
+        .toLowerCase()
         .replace(/ /g, '_')
         .replace(/₂/g, '2')
         .replace(/[()]/g, '')
@@ -71,11 +81,11 @@ driver.once('driver ready', () => {
         log('info', 'registering new metric', {'metric': metric_name });
         metrics[metric_name] = new prometheus.Gauge({
           name: metric_name,
-          help: value.property,
-          labelNames: [ 'node' ],
+          help: value_metadata.label,
+          labelNames: [ 'node', 'endpoint' ],
         });
       }
-      metrics[metric_name].set({ node: node.id }, value.newValue);
+      metrics[metric_name].set({ node: node.id, endpoint: value.endpoint }, value.newValue);
     });
     if (ZWAVE_INTERVAL > 0) {
       log('info', `we will actively ask node ${node.id} to refresh its values every ${ZWAVE_INTERVAL} seconds`);
@@ -88,6 +98,17 @@ driver.once('driver ready', () => {
     }
   });
 });
+
+if (MAX_RSS > 0) {
+  log('info', `Program will automatically exit when RSS reaches ${MAX_RSS} bytes.`);
+  setInterval(function () {
+    const { rss } = process.memoryUsage();
+    if (rss > MAX_RSS) {
+      log('error', `RSS (${rss}) exceeded MAX_RSS (${MAX_RSS}). Exiting.`);
+      process.exit(1);
+    }
+  }, 60 * 1000);
+}
 
 (async () => {
   try {
