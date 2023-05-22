@@ -41,14 +41,15 @@ to have way more experience with this than I do!).
 
 You need to "include" these sensors in your Z-Wave network (kind of
 "pair" them with your Z-Wave controller). I am embarrassed to admit
-that I *don't remember how I did this.* If I remember well, all that
+that I *don't remember how I did this* the first time.
+
+If I remember well, all that
 is required is to switch the Z-Wave controller into "inclusion mode",
 then press the inclusion button on the sensors, and *voilà*. I just
-can't remember how I switched the controller to inclusion mode. I think
-I used some CLI tool, or maybe fired up an interpreter and manually
-called some functions - sorry folks, I don't remember. Once it's
-done you don't need to do it again. Maybe I'll update this when I
-buy another batch of sensors!
+can't remember how I switched the controller to inclusion mode.
+
+When I got new sensors, I wrote the little inclusion.js script in
+this repo. It should switch the Z-Wave controller to inclusion mode.
 
 To run the exporter:
 
